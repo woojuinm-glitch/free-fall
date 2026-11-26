@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#09090b">
+<title>자유낙하 운동 물리 시뮬레이션</title>
+<style>
+:root{color-scheme:dark;--bg:#09090b;--panel:#18181b;--panel2:#202027;--line:#303039;--muted:#a1a1aa;--text:#f4f4f5;--blue:#38bdf8;--blue2:#0284c7;--pink:#f472b6;--yellow:#facc15}
+*{box-sizing:border-box}
+body{margin:0;padding:18px;background:radial-gradient(ellipse at 50% -20%,#172033 0%,var(--bg) 55%);color:var(--text);font-family:system-ui,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;min-height:100vh}
+h1{font-size:clamp(19px,3vw,24px);text-align:center;color:var(--blue);margin:0 0 5px;letter-spacing:-.04em}
+.subtitle{text-align:center;color:var(--muted);font-size:12px;margin:0 0 17px}
+.main{display:flex;gap:15px;max-width:1120px;margin:auto;align-items:stretch;justify-content:center;flex-wrap:wrap}
+.stage{flex:1 1 580px;min-width:0;max-width:720px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px;box-shadow:0 14px 35px #0008;overflow:hidden}
+canvas{display:block;width:100%;height:auto;aspect-ratio:650/540;border-radius:9px;background:#101018;cursor:crosshair;touch-action:manipulation}
+.side{flex:0 1 320px;min-width:min(100%,280px);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px;display:flex;flex-direction:column;gap:13px}
+.section{font-size:12px;font-weight:750;color:#c4c4cc;border-bottom:1px solid var(--line);padding-bottom:7px;display:flex;justify-content:space-between;align-items:center}
+.tag{font-size:10px;color:var(--yellow);font-weight:600}
+.presets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+button{font:inherit;cursor:pointer;transition:filter .15s,transform .08s,border-color .15s}
+button:active{transform:scale(.98)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.preset{padding:8px 5px;background:#27272a;border:1px solid #41414a;border-radius:7px;color:#e4e4e7;font-size:11px;font-weight:700}
+.preset:hover{filter:brightness(1.2)}
+.preset.active{background:#075985;border-color:var(--blue);color:white}
+.preset[data-name=blackhole].active{background:#5b21b6;border-color:#a78bfa}
+.control{display:grid;gap:5px}
+.control-head{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:#dedee3}
+.control-head output{color:var(--blue);font:12px ui-monospace,monospace;white-space:nowrap}
+input[type=range]{width:100%;accent-color:var(--blue);cursor:pointer}
+.hint{font-size:10px;color:#85858f;line-height:1.5;margin-top:-5px}
+.actions{display:flex;gap:8px}
+.action{flex:1;border:0;border-radius:7px;padding:10px 8px;background:var(--blue2);color:white;font-size:12px;font-weight:750}
+.action:hover{filter:brightness(1.15)}
+.action.secondary{background:#2b2b32;border:1px solid #484852;color:#e4e4e7}
+.toggles{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#c4c4cc}
+.toggles label{display:flex;align-items:center;gap:5px;cursor:pointer}
+input[type=checkbox]{accent-color:var(--blue)}
+.dash{max-width:1120px;margin:13px auto 0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.card{background:linear-gradient(145deg,#1c1c23,#15151a);border:1px solid var(--line);border-radius:10px;padding:11px 13px;min-height:66px;display:flex;flex-direction:column;gap:5px}
+.dash-label{font-size:10px;color:var(--muted)}
+.dash-value{font:700 16px ui-monospace,monospace;letter-spacing:-.03em;overflow-wrap:anywhere}
+.blue{color:var(--blue)}.pink{color:var(--pink)}.yellow{color:var(--yellow)}
+.footer{max-width:1120px;margin:10px auto 0;color:#777782;font-size:10px;line-height:1.6;text-align:center}
+@media(max-width:760px){body{padding:12px}.stage{flex-basis:100%}.side{flex:1 1 100%;display:grid;grid-template-columns:1fr 1fr;gap:12px}.side>.section,.side>.presets,.side>.actions,.side>.toggles{grid-column:1/-1}.dash{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}}
+@media(max-width:390px){.side{display:flex}.dash-value{font-size:14px}}
+</style>
+</head>
+<body>
+<h1>자유낙하 운동 물리 시뮬레이션</h1>
+<p class="subtitle">중력 · 공기 저항 · 탄성 충돌을 실시간으로 관찰해 보세요</p>
+<main class="main">
+  <section class="stage" aria-label="낙하 시뮬레이션 화면">
+    <canvas id="simCanvas" width="650" height="540" aria-label="캔버스를 클릭하면 해당 고도에서 공이 떨어집니다"></canvas>
+  </section>
+  <aside class="side">
+    <div class="section"><span>태양계 천체 프리셋</span><span class="tag" id="customTag" hidden>수동 조절됨</span></div>
+    <div class="presets">
+      <button class="preset" data-name="mercury" data-label="수성" data-g="3.70" data-d="0">수성 · 3.70</button>
+      <button class="preset" data-name="venus" data-label="금성" data-g="8.87" data-d="0.080">금성 · 8.87</button>
+      <button class="preset active" data-name="earth" data-label="지구" data-g="9.80" data-d="0.015">지구 · 9.80</button>
+      <button class="preset" data-name="moon" data-label="달" data-g="1.62" data-d="0">달 · 1.62</button>
+      <button class="preset" data-name="mars" data-label="화성" data-g="3.71" data-d="0.020">화성 · 3.71</button>
+      <button class="preset" data-name="jupiter" data-label="목성" data-g="24.79" data-d="0.030">목성 · 24.79</button>
+      <button class="preset" data-name="saturn" data-label="토성" data-g="10.44" data-d="0.025">토성 · 10.44</button>
+      <button class="preset" data-name="uranus" data-label="천왕성" data-g="8.69" data-d="0.020">천왕성 · 8.69</button>
+      <button class="preset" data-name="neptune" data-label="해왕성" data-g="11.15" data-d="0.022">해왕성 · 11.15</button>
+      <button class="preset" data-name="blackhole" data-label="블랙홀" data-g="100" data-d="0">블랙홀 · 100</button>
+    </div>
+    <div class="section">물리 파라미터 제어</div>
+    <div class="control"><div class="control-head"><label for="height">초기 낙하 높이</label><output id="heightOut">300 m</output></div><input id="height" type="range" min="10" max="500" step="5" value="300"></div>
+    <div class="control"><div class="control-head"><label for="gravity">중력 가속도 (g)</label><output id="gravityOut">9.80 m/s²</output></div><input id="gravity" type="range" min="0" max="100" step=".1" value="9.8"></div>
+    <div class="control"><div class="control-head"><label for="drag">공기 저항 계수</label><output id="dragOut">0.015</output></div><input id="drag" type="range" min="0" max=".1" step=".001" value=".015"></div>
+    <div class="control"><div class="control-head"><label for="bounce">바닥 반발 계수</label><output id="bounceOut">0.70</output></div><input id="bounce" type="range" min="0" max=".95" step=".05" value=".7"></div>
+    <div class="control"><div class="control-head"><label for="speed">시뮬레이션 배속</label><output id="speedOut">1.0×</output></div><input id="speed" type="range" min=".25" max="3" step=".25" value="1"></div>
+    <p class="hint">공기 저항은 속도의 제곱에 비례하는 교육용 모델입니다. 수성과 달은 대기가 거의 없어 기본 공기 저항을 0으로 설정했습니다. 캔버스의 원하는 높이를 누르면 그 위치에서 다시 낙하합니다.</p>
+    <div class="toggles">
+      <label><input id="vectors" type="checkbox" checked> 힘 벡터</label>
+      <label><input id="trail" type="checkbox" checked> 이동 궤적</label>
+      <label><input id="grid" type="checkbox" checked> 고도 격자</label>
+    </div>
+    <div class="actions"><button class="action" id="drop">다시 떨어뜨리기</button><button class="action secondary" id="pause">일시정지</button></div>
+  </aside>
+</main>
+<section class="dash" aria-live="polite">
+  <div class="card"><span class="dash-label">현재 상태</span><strong class="dash-value blue" id="status">낙하 중</strong></div>
+  <div class="card"><span class="dash-label">현재 속력</span><strong class="dash-value" id="speedValue">0.00 m/s</strong></div>
+  <div class="card"><span class="dash-label">현재 고도</span><strong class="dash-value" id="heightValue">300.0 m</strong></div>
+  <div class="card"><span class="dash-label">공기 저항력 (질량 1kg 기준)</span><strong class="dash-value yellow" id="forceValue">0.00 N</strong></div>
+</section>
+<p class="footer">교육용 단순 모델입니다. 실제 천체의 대기·지표 환경이나 블랙홀의 상대론적 효과를 정밀하게 재현하지 않습니다.</p>
+<script>
+(() => {
+'use strict';
+const canvas=document.getElementById('simCanvas'),ctx=canvas.getContext('2d');
+const $=id=>document.getElementById(id), W=650,H=540,GROUND=495,MAX=500,PIXELS_PER_M=0.9;
+const ui={height:$('height'),gravity:$('gravity'),drag:$('drag'),bounce:$('bounce'),speed:$('speed')};
+const out={height:$('heightOut'),gravity:$('gravityOut'),drag:$('dragOut'),bounce:$('bounceOut'),speed:$('speedOut')};
+const presets=[...document.querySelectorAll('.preset')];
+let state={height:300,g:9.8,k:.015,bounce:.7,scale:1,paused:false,planet:'earth',label:'지구',manual:false,grounded:false,absorbed:false,absorb:0,y:300,v:0,elapsed:0};
+let trail=[],last=0,accumulator=0;
+const fixed=1/120;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const py=m=>GROUND-clamp(m,0,MAX)*PIXELS_PER_M;
+const fmt=(n,d=2)=>Number(n).toFixed(d);
+function syncOutputs(){out.height.textContent=state.height+' m';out.gravity.textContent=fmt(state.g)+' m/s²';out.drag.textContent=fmt(state.k,3);out.bounce.textContent=fmt(state.bounce);out.speed.textContent=fmt(state.scale,2)+'×';}
+function reset(){state.y=state.height;state.v=0;state.grounded=false;state.absorbed=false;state.absorb=0;state.elapsed=0;trail=[];state.paused=false;$('pause').textContent='일시정지';}
+function syncManual(){const p=presets.find(b=>b.dataset.name===state.planet);state.manual=!p||Math.abs(+p.dataset.g-state.g)>.051||Math.abs(+p.dataset.d-state.k)>.00051;$('customTag').hidden=!state.manual;}
+function setPreset(btn){presets.forEach(b=>b.classList.toggle('active',b===btn));state.planet=btn.dataset.name;state.label=btn.dataset.label;state.g=+btn.dataset.g;state.k=+btn.dataset.d;state.manual=false;$('customTag').hidden=true;ui.gravity.value=state.g;ui.drag.value=state.k;syncOutputs();reset();}
+ui.height.addEventListener('input',()=>{state.height=+ui.height.value;syncOutputs();reset();});
+ui.gravity.addEventListener('input',()=>{state.g=+ui.gravity.value;syncOutputs();syncManual();});
+ui.drag.addEventListener('input',()=>{state.k=+ui.drag.value;syncOutputs();syncManual();});
+ui.bounce.addEventListener('input',()=>{state.bounce=+ui.bounce.value;syncOutputs();});
+ui.speed.addEventListener('input',()=>{state.scale=+ui.speed.value;syncOutputs();});
+presets.forEach(b=>b.addEventListener('click',()=>setPreset(b)));
+$('drop').addEventListener('click',reset);
+$('pause').addEventListener('click',()=>{state.paused=!state.paused;$('pause').textContent=state.paused?'재개':'일시정지';last=0;});
+canvas.addEventListener('pointerdown',e=>{const r=canvas.getBoundingClientRect(),y=(e.clientY-r.top)*H/r.height;state.height=Math.round(clamp((GROUND-y)/PIXELS_PER_M,10,500)/5)*5;ui.height.value=state.height;syncOutputs();reset();});
+function physics(dt){
+ if(state.paused)return;
+ if(state.absorbed){state.absorb=Math.min(1,state.absorb+dt*2.2);return;}
+ if(state.grounded)return;
+ const dragAccel=state.k*state.v*Math.abs(state.v);
+ const accel=state.g*1-dragAccel;
+ state.v+=accel*dt;
+ state.y-=state.v*dt;
+ state.elapsed+=dt;
+ if(state.y<=0){
+  state.y=0;
+  if(state.planet==='blackhole'){state.absorbed=true;state.absorb=0;state.v=0;return;}
+  const rebound=Math.abs(state.v)*state.bounce;
+  const threshold=Math.max(.12,state.g*dt*1.2);
+  const bounceHeight=state.g>0?rebound*rebound/(2*state.g):0;
+  if(rebound<threshold||bounceHeight<.025){state.v=0;state.grounded=true;}
+  else state.v=-rebound;
+ }
+ if(state.y>MAX){state.y=MAX;state.v=0;}
+ if(state.elapsed>360){state.v=0;state.grounded=true;}
+}
+function roundedRect(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
+function drawBackground(){
+ const p=state.planet;
+ const colors={mercury:['#090b12','#25252a'],moon:['#090b12','#27272d'],venus:['#26130d','#713b17'],earth:['#071827','#153e59'],mars:['#21100d','#632a19'],jupiter:['#211a16','#6b4c39'],saturn:['#211d12','#6c5a26'],uranus:['#08232b','#175766'],neptune:['#07132d','#183c79'],blackhole:['#090513','#28104d']};
+ const [top,bottom]=colors[p]||colors.earth,g=ctx.createLinearGradient(0,0,0,GROUND);g.addColorStop(0,top);g.addColorStop(1,bottom);ctx.fillStyle=g;ctx.fillRect(0,0,W,GROUND);
+ if(['mercury','moon'].includes(p)){for(let i=0;i<65;i++){const x=(i*97+31)%W,y=(i*53+19)%430;ctx.globalAlpha=.2+(i%4)*.13;ctx.fillStyle='#e4e4e7';ctx.fillRect(x,y,i%7===0?2:1,i%7===0?2:1);}ctx.globalAlpha=1;}
+ if(p==='earth'){ctx.fillStyle='#38bdf8';ctx.globalAlpha=.07;for(let i=0;i<8;i++){ctx.beginPath();ctx.ellipse(120+i*75,350+(i%3)*20,80,14,0,0,Math.PI*2);ctx.fill();}ctx.globalAlpha=1;}
+ if(p==='venus'||p==='jupiter'||p==='saturn'){for(let i=0;i<8;i++){ctx.globalAlpha=.05+(i%2)*.03;ctx.fillStyle=p==='venus'?'#fbbf24':'#f5d5a0';ctx.beginPath();ctx.ellipse(300,55+i*52,310,13,0,0,Math.PI*2);ctx.fill();}ctx.globalAlpha=1;}
+ if(p==='saturn'){ctx.save();ctx.translate(465,145);ctx.rotate(-.3);ctx.strokeStyle='#f5d58a';for(let i=0;i<4;i++){ctx.globalAlpha=.12;ctx.lineWidth=5+i*3;ctx.beginPath();ctx.ellipse(0,0,220+i*22,30+i*5,0,0,Math.PI*2);ctx.stroke();}ctx.restore();ctx.globalAlpha=1;}
+ if(p==='blackhole'){const rad=ctx.createRadialGradient(325,GROUND,8,325,GROUND,240);rad.addColorStop(0,'#c4b5fd');rad.addColorStop(.18,'#7c3aed');rad.addColorStop(.55,'#3b0764');rad.addColorStop(1,'transparent');ctx.fillStyle=rad;ctx.fillRect(75,250,500,245);ctx.strokeStyle='#a78bfa';for(let i=0;i<5;i++){ctx.globalAlpha=.25;ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(325,GROUND+5+i*7,60+i*27,12+i*5,0,Math.PI,Math.PI*2);ctx.stroke();}ctx.globalAlpha=1;}
+}
+function drawGround(){
+ const p=state.planet,base={mercury:'#57534e',moon:'#71717a',venus:'#9a4315',earth:'#1e3a8a',mars:'#a33b19',jupiter:'#a87955',saturn:'#b88b22',uranus:'#0891b2',neptune:'#1d4ed8',blackhole:'#2e1065'}[p]||'#3f3f46';
+ ctx.fillStyle=base;ctx.fillRect(0,GROUND,W,H-GROUND);
+ if(p==='earth'||p==='mars'){ctx.fillStyle=p==='earth'?'#166534':'#ea580c';ctx.globalAlpha=.8;ctx.beginPath();ctx.moveTo(0,GROUND+12);ctx.quadraticCurveTo(140,GROUND-3,260,GROUND+15);ctx.quadraticCurveTo(440,GROUND+30,650,GROUND+8);ctx.lineTo(650,H);ctx.lineTo(0,H);ctx.fill();ctx.globalAlpha=1;}
+ if(['moon','mercury'].includes(p)){ctx.strokeStyle='#a1a1aa';for(let i=0;i<7;i++){ctx.beginPath();ctx.ellipse(45+i*95,515+(i%2)*9,13+(i%3)*4,5,0,0,Math.PI*2);ctx.stroke();}}
+ if(p==='jupiter'||p==='neptune'){ctx.strokeStyle='#f4d7a1';ctx.globalAlpha=.45;for(let i=0;i<5;i++){ctx.beginPath();ctx.moveTo(0,502+i*8);for(let x=0;x<=650;x+=15)ctx.lineTo(x,502+i*8+Math.sin(x*.025+i)*2);ctx.stroke();}ctx.globalAlpha=1;}
+ const lc={mercury:'#a8a29e',moon:'#d4d4d8',venus:'#fb923c',earth:'#4ade80',mars:'#fb923c',jupiter:'#f1d6a5',saturn:'#fde047',uranus:'#67e8f9',neptune:'#60a5fa',blackhole:'#a78bfa'};
+ ctx.strokeStyle=lc[p];ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,GROUND);ctx.lineTo(W,GROUND);ctx.stroke();
+}
+function arrow(x,y,dx,dy,color,label,align){const ex=x+dx,ey=y+dy,a=Math.atan2(dy,dx);ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=2.2;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(ex,ey);ctx.stroke();ctx.beginPath();ctx.moveTo(ex,ey);ctx.lineTo(ex-8*Math.cos(a-.45),ey-8*Math.sin(a-.45));ctx.lineTo(ex-8*Math.cos(a+.45),ey-8*Math.sin(a+.45));ctx.closePath();ctx.fill();ctx.font='bold 11px system-ui';ctx.textAlign=align;ctx.fillText(label,align==='left'?x+15:x-15,y+dy/2-5);}
+function draw(){
+ ctx.clearRect(0,0,W,H);drawBackground();
+ const y=py(state.y),x=300;
+ if($('grid').checked){ctx.font='10px ui-monospace';ctx.textAlign='left';for(let m=0;m<=500;m+=50){const yy=py(m);ctx.strokeStyle='#ffffff18';ctx.setLineDash([2,5]);ctx.beginPath();ctx.moveTo(22,yy);ctx.lineTo(590,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#a1a1aa';ctx.fillText(m+'m',606,yy+3);}}
+ ctx.fillStyle='#e4e4e7';roundedRect(20,15,180,28,7);ctx.fill();ctx.fillStyle='#18181b';ctx.font='bold 12px system-ui';ctx.textAlign='left';ctx.fillText((state.manual?state.label+' · 수동 조절':'환경 · '+state.label),30,33);
+ const initial=py(state.height);ctx.strokeStyle='#fb923c';ctx.setLineDash([5,5]);ctx.beginPath();ctx.moveTo(22,initial);ctx.lineTo(585,initial);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#fb923c';ctx.font='bold 11px system-ui';ctx.fillText('초기 높이 '+state.height+'m',27,Math.max(58,initial-7));
+ drawGround();
+ if($('trail').checked&&trail.length>1){ctx.beginPath();trail.forEach((pt,i)=>i?ctx.lineTo(pt.x,pt.y):ctx.moveTo(pt.x,pt.y));ctx.strokeStyle='#7dd3fc';ctx.globalAlpha=.35;ctx.lineWidth=2;ctx.stroke();ctx.globalAlpha=1;}
+ if(!state.absorbed||state.absorb<1){ctx.save();if(state.absorbed){const s=Math.max(.01,1-state.absorb);ctx.globalAlpha=s;ctx.translate(x,y);ctx.scale(s,s);ctx.translate(-x,-y);}const ballGrad=ctx.createRadialGradient(x-6,y-7,2,x,y,18);ballGrad.addColorStop(0,'#e0f2fe');ballGrad.addColorStop(.45,'#38bdf8');ballGrad.addColorStop(1,'#0369a1');ctx.shadowColor='#38bdf8';ctx.shadowBlur=18;ctx.fillStyle=ballGrad;ctx.beginPath();ctx.arc(x,y,18,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle='#e0f2fe';ctx.lineWidth=1.5;ctx.stroke();ctx.restore();}
+ if($('vectors').checked&&!state.grounded&&!state.absorbed){const gl=clamp(state.g*2.4,12,65);arrow(x-12,y,-0,gl,'#f472b6','중력 '+fmt(state.g)+' m/s²','right');if(state.v>0&&state.k>0.00001){const f=state.k*state.v*state.v,dl=clamp(f*4,0,55);if(dl>3)arrow(x+12,y,0,-dl,'#facc15','저항 '+fmt(f)+' N','left');}}
+ let status=state.absorbed?'블랙홀에 흡수됨':state.grounded?'지면 정지':state.v<-.01?'바운드 상승 중':'낙하 중';
+ $('status').textContent=status;$('status').style.color=state.absorbed?'#c4b5fd':state.grounded?'#4ade80':'#38bdf8';
+ $('speedValue').textContent=fmt(Math.abs(state.v))+' m/s';$('heightValue').textContent=fmt(state.y,1)+' m';$('forceValue').textContent=fmt(state.k*state.v*state.v)+' N';
+}
+function frame(now){if(!last)last=now;const realDt=Math.min((now-last)/1000,.05);last=now;if(!state.paused){accumulator+=realDt*state.scale;let steps=0;while(accumulator>=fixed&&steps<20){physics(fixed);accumulator-=fixed;steps++;}if(steps===20)accumulator=0;if(!state.grounded&&!state.absorbed){trail.push({x:300,y:py(state.y)});if(trail.length>180)trail.shift();}}draw();requestAnimationFrame(frame);}
+syncOutputs();requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
