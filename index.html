@@ -43,6 +43,13 @@ input[type=checkbox]{accent-color:var(--blue)}
 .dash-value{font:700 16px ui-monospace,monospace;letter-spacing:-.03em;overflow-wrap:anywhere}
 .blue{color:var(--blue)}.pink{color:var(--pink)}.yellow{color:var(--yellow)}
 .footer{max-width:1120px;margin:10px auto 0;color:#777782;font-size:10px;line-height:1.6;text-align:center}
+
+.graphs{max-width:1120px;margin:16px auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.graph-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;min-width:0}
+.graph-title{font-size:13px;font-weight:800;margin:0 0 8px;color:#e4e4e7}
+.graph-canvas{width:100%;height:190px;display:block;background:#101018;border-radius:8px}
+.graph-note{font-size:10px;color:var(--muted);margin:7px 0 0}
+@media(max-width:760px){.graphs{grid-template-columns:1fr}}
 @media(max-width:760px){body{padding:12px}.stage{flex-basis:100%}.side{flex:1 1 100%;display:grid;grid-template-columns:1fr 1fr;gap:12px}.side>.section,.side>.presets,.side>.actions,.side>.toggles{grid-column:1/-1}.dash{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}}
 @media(max-width:390px){.side{display:flex}.dash-value{font-size:14px}}
 </style>
@@ -89,6 +96,12 @@ input[type=checkbox]{accent-color:var(--blue)}
   <div class="card"><span class="dash-label">현재 고도</span><strong class="dash-value" id="heightValue">300.0 m</strong></div>
   <div class="card"><span class="dash-label">공기 저항력 (질량 1kg 기준)</span><strong class="dash-value yellow" id="forceValue">0.00 N</strong></div>
 </section>
+
+<section class="graphs" aria-label="실시간 운동 그래프">
+ <article class="graph-card"><h2 class="graph-title">시간–높이 그래프</h2><canvas class="graph-canvas" id="heightGraph" width="520" height="220"></canvas><p class="graph-note">높이 (m) · 시간 (s)</p></article>
+ <article class="graph-card"><h2 class="graph-title">시간–속도 그래프</h2><canvas class="graph-canvas" id="velocityGraph" width="520" height="220"></canvas><p class="graph-note">아래 방향을 +로 표시 · 속도 (m/s)</p></article>
+ <article class="graph-card"><h2 class="graph-title">시간–가속도 그래프</h2><canvas class="graph-canvas" id="accelGraph" width="520" height="220"></canvas><p class="graph-note">중력과 공기저항의 합성 가속도 (m/s²)</p></article>
+</section>
 <p class="footer">교육용 단순 모델입니다. 실제 천체의 대기·지표 환경이나 블랙홀의 상대론적 효과를 정밀하게 재현하지 않습니다.</p>
 <script>
 (() => {
@@ -99,13 +112,14 @@ const ui={height:$('height'),gravity:$('gravity'),drag:$('drag'),bounce:$('bounc
 const out={height:$('heightOut'),gravity:$('gravityOut'),drag:$('dragOut'),bounce:$('bounceOut'),speed:$('speedOut')};
 const presets=[...document.querySelectorAll('.preset')];
 let state={height:300,x:300,g:9.8,k:.015,bounce:.7,scale:1,paused:false,planet:'earth',label:'지구',manual:false,grounded:false,absorbed:false,absorb:0,y:300,v:0,elapsed:0};
-let trail=[],last=0,accumulator=0;
+let trail=[],last=0,accumulator=0,graphData=[];
+const graphCanvases={height:$('heightGraph'),velocity:$('velocityGraph'),accel:$('accelGraph')};
 const fixed=1/120;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const py=m=>GROUND-clamp(m,0,MAX)*PIXELS_PER_M;
 const fmt=(n,d=2)=>Number(n).toFixed(d);
 function syncOutputs(){out.height.textContent=state.height+' m';out.gravity.textContent=fmt(state.g)+' m/s²';out.drag.textContent=fmt(state.k,3);out.bounce.textContent=fmt(state.bounce);out.speed.textContent=fmt(state.scale,2)+'×';}
-function reset(){state.y=state.height;state.v=0;state.grounded=false;state.absorbed=false;state.absorb=0;state.elapsed=0;trail=[];state.paused=false;$('pause').textContent='일시정지';}
+function reset(){state.y=state.height;state.v=0;state.grounded=false;state.absorbed=false;state.absorb=0;state.elapsed=0;trail=[];graphData=[{t:0,h:state.height,v:0,a:state.g}];state.paused=false;$('pause').textContent='일시정지';}
 function syncManual(){const p=presets.find(b=>b.dataset.name===state.planet);state.manual=!p||Math.abs(+p.dataset.g-state.g)>.051||Math.abs(+p.dataset.d-state.k)>.00051;$('customTag').hidden=!state.manual;}
 function setPreset(btn){presets.forEach(b=>b.classList.toggle('active',b===btn));state.planet=btn.dataset.name;state.label=btn.dataset.label;state.g=+btn.dataset.g;state.k=+btn.dataset.d;state.manual=false;$('customTag').hidden=true;ui.gravity.value=state.g;ui.drag.value=state.k;syncOutputs();reset();}
 ui.height.addEventListener('input',()=>{state.height=+ui.height.value;syncOutputs();reset();});
@@ -137,6 +151,8 @@ function physics(dt){
  }
  if(state.y>MAX){state.y=MAX;state.v=0;}
  if(state.elapsed>360){state.v=0;state.grounded=true;}
+ graphData.push({t:state.elapsed,h:state.y,v:state.v,a:accel});
+ if(graphData.length>2400)graphData.shift();
 }
 function roundedRect(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
 function drawBackground(){
@@ -173,8 +189,21 @@ function draw(){
  $('status').textContent=status;$('status').style.color=state.absorbed?'#c4b5fd':state.grounded?'#4ade80':'#38bdf8';
  $('speedValue').textContent=fmt(Math.abs(state.v))+' m/s';$('heightValue').textContent=fmt(state.y,1)+' m';$('forceValue').textContent=fmt(state.k*state.v*state.v)+' N';
 }
-function frame(now){if(!last)last=now;const realDt=Math.min((now-last)/1000,.05);last=now;if(!state.paused){accumulator+=realDt*state.scale;let steps=0;while(accumulator>=fixed&&steps<20){physics(fixed);accumulator-=fixed;steps++;}if(steps===20)accumulator=0;if(!state.grounded&&!state.absorbed){trail.push({x:state.x,y:py(state.y)});if(trail.length>180)trail.shift();}}draw();requestAnimationFrame(frame);}
-syncOutputs();requestAnimationFrame(frame);
+
+function drawGraph(canvas,key,color){
+ const c=canvas.getContext('2d'),w=canvas.width,h=canvas.height,pad={l:48,r:12,t:12,b:30};c.clearRect(0,0,w,h);c.fillStyle='#101018';c.fillRect(0,0,w,h);
+ const data=graphData;if(!data.length)return;let xmax=Math.max(1,data[data.length-1].t),vals=data.map(d=>d[key]);let ymin=Math.min(0,...vals),ymax=Math.max(1,...vals);if(ymax-ymin<1){ymax=ymin+1;}
+ if(key==='h'){ymin=0;ymax=Math.max(10,state.height*1.05);}if(key==='v'){ymin=Math.min(0,ymin);ymax=Math.max(1,ymax*1.1);}if(key==='a'){const ext=Math.max(1,Math.abs(ymin),Math.abs(ymax));ymin=-ext*1.1;ymax=ext*1.1;}
+ const X=t=>pad.l+(t/xmax)*(w-pad.l-pad.r),Y=v=>h-pad.b-((v-ymin)/(ymax-ymin))*(h-pad.t-pad.b);
+ c.strokeStyle='#ffffff18';c.lineWidth=1;c.fillStyle='#a1a1aa';c.font='11px system-ui';c.textAlign='center';for(let i=0;i<=4;i++){let xx=pad.l+i*(w-pad.l-pad.r)/4;c.beginPath();c.moveTo(xx,pad.t);c.lineTo(xx,h-pad.b);c.stroke();c.fillText((xmax*i/4).toFixed(xmax<10?1:0),xx,h-9);}
+ c.textAlign='right';for(let i=0;i<=4;i++){let val=ymin+(ymax-ymin)*i/4,yy=Y(val);c.beginPath();c.moveTo(pad.l,yy);c.lineTo(w-pad.r,yy);c.stroke();c.fillText(val.toFixed(key==='h'?0:1),pad.l-6,yy+4);}
+ c.strokeStyle=color;c.lineWidth=2.5;c.lineJoin='round';c.beginPath();data.forEach((d,i)=>i?c.lineTo(X(d.t),Y(d[key])):c.moveTo(X(d.t),Y(d[key])));c.stroke();
+ const d=data[data.length-1];c.fillStyle=color;c.beginPath();c.arc(X(d.t),Y(d[key]),3.5,0,Math.PI*2);c.fill();
+}
+function drawGraphs(){drawGraph(graphCanvases.height,'h','#38bdf8');drawGraph(graphCanvases.velocity,'v','#f472b6');drawGraph(graphCanvases.accel,'a','#facc15');}
+
+function frame(now){if(!last)last=now;const realDt=Math.min((now-last)/1000,.05);last=now;if(!state.paused){accumulator+=realDt*state.scale;let steps=0;while(accumulator>=fixed&&steps<20){physics(fixed);accumulator-=fixed;steps++;}if(steps===20)accumulator=0;if(!state.grounded&&!state.absorbed){trail.push({x:state.x,y:py(state.y)});if(trail.length>180)trail.shift();}}draw();drawGraphs();requestAnimationFrame(frame);}
+syncOutputs();reset();requestAnimationFrame(frame);
 })();
 </script>
 </body>
