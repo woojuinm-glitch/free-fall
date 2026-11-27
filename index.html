@@ -52,7 +52,7 @@ input[type=checkbox]{accent-color:var(--blue)}
 <p class="subtitle">중력 · 공기 저항 · 탄성 충돌을 실시간으로 관찰해 보세요</p>
 <main class="main">
   <section class="stage" aria-label="낙하 시뮬레이션 화면">
-    <canvas id="simCanvas" width="650" height="540" aria-label="캔버스를 클릭하면 해당 고도에서 공이 떨어집니다"></canvas>
+    <canvas id="simCanvas" width="650" height="540" aria-label="캔버스를 클릭하면 해당 위치에서 공이 떨어집니다"></canvas>
   </section>
   <aside class="side">
     <div class="section"><span>태양계 천체 프리셋</span><span class="tag" id="customTag" hidden>수동 조절됨</span></div>
@@ -74,7 +74,7 @@ input[type=checkbox]{accent-color:var(--blue)}
     <div class="control"><div class="control-head"><label for="drag">공기 저항 계수</label><output id="dragOut">0.015</output></div><input id="drag" type="range" min="0" max=".1" step=".001" value=".015"></div>
     <div class="control"><div class="control-head"><label for="bounce">바닥 반발 계수</label><output id="bounceOut">0.70</output></div><input id="bounce" type="range" min="0" max=".95" step=".05" value=".7"></div>
     <div class="control"><div class="control-head"><label for="speed">시뮬레이션 배속</label><output id="speedOut">1.0×</output></div><input id="speed" type="range" min=".25" max="3" step=".25" value="1"></div>
-    <p class="hint">공기 저항은 속도의 제곱에 비례하는 교육용 모델입니다. 수성과 달은 대기가 거의 없어 기본 공기 저항을 0으로 설정했습니다. 캔버스의 원하는 높이를 누르면 그 위치에서 다시 낙하합니다.</p>
+    <p class="hint">공기 저항은 속도의 제곱에 비례하는 교육용 모델입니다. 수성과 달은 대기가 거의 없어 기본 공기 저항을 0으로 설정했습니다. 캔버스의 원하는 위치를 누르면 해당 x 위치와 높이에서 다시 낙하합니다.</p>
     <div class="toggles">
       <label><input id="vectors" type="checkbox" checked> 힘 벡터</label>
       <label><input id="trail" type="checkbox" checked> 이동 궤적</label>
@@ -98,7 +98,7 @@ const $=id=>document.getElementById(id), W=650,H=540,GROUND=495,MAX=500,PIXELS_P
 const ui={height:$('height'),gravity:$('gravity'),drag:$('drag'),bounce:$('bounce'),speed:$('speed')};
 const out={height:$('heightOut'),gravity:$('gravityOut'),drag:$('dragOut'),bounce:$('bounceOut'),speed:$('speedOut')};
 const presets=[...document.querySelectorAll('.preset')];
-let state={height:300,g:9.8,k:.015,bounce:.7,scale:1,paused:false,planet:'earth',label:'지구',manual:false,grounded:false,absorbed:false,absorb:0,y:300,v:0,elapsed:0};
+let state={height:300,x:300,g:9.8,k:.015,bounce:.7,scale:1,paused:false,planet:'earth',label:'지구',manual:false,grounded:false,absorbed:false,absorb:0,y:300,v:0,elapsed:0};
 let trail=[],last=0,accumulator=0;
 const fixed=1/120;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -116,7 +116,7 @@ ui.speed.addEventListener('input',()=>{state.scale=+ui.speed.value;syncOutputs()
 presets.forEach(b=>b.addEventListener('click',()=>setPreset(b)));
 $('drop').addEventListener('click',reset);
 $('pause').addEventListener('click',()=>{state.paused=!state.paused;$('pause').textContent=state.paused?'재개':'일시정지';last=0;});
-canvas.addEventListener('pointerdown',e=>{const r=canvas.getBoundingClientRect(),y=(e.clientY-r.top)*H/r.height;state.height=Math.round(clamp((GROUND-y)/PIXELS_PER_M,10,500)/5)*5;ui.height.value=state.height;syncOutputs();reset();});
+canvas.addEventListener('pointerdown',e=>{const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)*W/r.width,y=(e.clientY-r.top)*H/r.height;state.x=Math.round(clamp(x,20,W-20));state.height=Math.round(clamp((GROUND-y)/PIXELS_PER_M,10,500)/5)*5;ui.height.value=state.height;syncOutputs();reset();});
 function physics(dt){
  if(state.paused)return;
  if(state.absorbed){state.absorb=Math.min(1,state.absorb+dt*2.2);return;}
@@ -161,7 +161,7 @@ function drawGround(){
 function arrow(x,y,dx,dy,color,label,align){const ex=x+dx,ey=y+dy,a=Math.atan2(dy,dx);ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=2.2;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(ex,ey);ctx.stroke();ctx.beginPath();ctx.moveTo(ex,ey);ctx.lineTo(ex-8*Math.cos(a-.45),ey-8*Math.sin(a-.45));ctx.lineTo(ex-8*Math.cos(a+.45),ey-8*Math.sin(a+.45));ctx.closePath();ctx.fill();ctx.font='bold 11px system-ui';ctx.textAlign=align;ctx.fillText(label,align==='left'?x+15:x-15,y+dy/2-5);}
 function draw(){
  ctx.clearRect(0,0,W,H);drawBackground();
- const y=py(state.y),x=300;
+ const y=py(state.y),x=state.x;
  if($('grid').checked){ctx.font='10px ui-monospace';ctx.textAlign='left';for(let m=0;m<=500;m+=50){const yy=py(m);ctx.strokeStyle='#ffffff18';ctx.setLineDash([2,5]);ctx.beginPath();ctx.moveTo(22,yy);ctx.lineTo(590,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#a1a1aa';ctx.fillText(m+'m',606,yy+3);}}
  ctx.fillStyle='#e4e4e7';roundedRect(20,15,180,28,7);ctx.fill();ctx.fillStyle='#18181b';ctx.font='bold 12px system-ui';ctx.textAlign='left';ctx.fillText((state.manual?state.label+' · 수동 조절':'환경 · '+state.label),30,33);
  const initial=py(state.height);ctx.strokeStyle='#fb923c';ctx.setLineDash([5,5]);ctx.beginPath();ctx.moveTo(22,initial);ctx.lineTo(585,initial);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#fb923c';ctx.font='bold 11px system-ui';ctx.fillText('초기 높이 '+state.height+'m',27,Math.max(58,initial-7));
@@ -173,7 +173,7 @@ function draw(){
  $('status').textContent=status;$('status').style.color=state.absorbed?'#c4b5fd':state.grounded?'#4ade80':'#38bdf8';
  $('speedValue').textContent=fmt(Math.abs(state.v))+' m/s';$('heightValue').textContent=fmt(state.y,1)+' m';$('forceValue').textContent=fmt(state.k*state.v*state.v)+' N';
 }
-function frame(now){if(!last)last=now;const realDt=Math.min((now-last)/1000,.05);last=now;if(!state.paused){accumulator+=realDt*state.scale;let steps=0;while(accumulator>=fixed&&steps<20){physics(fixed);accumulator-=fixed;steps++;}if(steps===20)accumulator=0;if(!state.grounded&&!state.absorbed){trail.push({x:300,y:py(state.y)});if(trail.length>180)trail.shift();}}draw();requestAnimationFrame(frame);}
+function frame(now){if(!last)last=now;const realDt=Math.min((now-last)/1000,.05);last=now;if(!state.paused){accumulator+=realDt*state.scale;let steps=0;while(accumulator>=fixed&&steps<20){physics(fixed);accumulator-=fixed;steps++;}if(steps===20)accumulator=0;if(!state.grounded&&!state.absorbed){trail.push({x:state.x,y:py(state.y)});if(trail.length>180)trail.shift();}}draw();requestAnimationFrame(frame);}
 syncOutputs();requestAnimationFrame(frame);
 })();
 </script>
